@@ -41,8 +41,12 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
   Timer? pollTimer;
 
   final LocalAuthentication _auth = LocalAuthentication();
+
   bool _unlocked = false;
   bool _authInProgress = false;
+
+  // csak akkor kérjünk újra authot, ha tényleg háttérbe ment
+  bool _needsAuth = true;
 
   @override
   void initState() {
@@ -60,17 +64,36 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // háttérből visszajövet is kérjen
+    // Ha tényleg háttérbe ment, akkor zárjuk vissza.
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _needsAuth = true;
+
+      // ha már fel volt oldva, tegyük vissza "zárt" állapotba és állítsuk le a pollingot
+      if (_unlocked) {
+        _stopPolling();
+        if (mounted) setState(() => _unlocked = false);
+      }
+      return;
+    }
+
+    // Visszajött előtérbe: csak akkor kérjünk, ha előtte tényleg háttérben volt
     if (state == AppLifecycleState.resumed) {
-      _gate();
+      if (_needsAuth) _gate();
     }
   }
+
+  Map<String, String> _headers() => {
+        "X-API-Key": apiKey,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      };
 
   Future<void> _gate() async {
     if (_authInProgress) return;
     _authInProgress = true;
 
     try {
+      // Nem ellenőrizgetjük a telefon lock állapotát külön, csak kérünk authot.
       final ok = await _auth.authenticate(
         localizedReason: 'VibeLock feloldás',
         options: const AuthenticationOptions(
@@ -83,18 +106,24 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
       if (!mounted) return;
 
       if (ok) {
+        _needsAuth = false; // <- ez a kulcs, ettől nem lesz loop
         if (!_unlocked) {
           setState(() => _unlocked = true);
           _startPolling();
         }
       } else {
-        // marad zárolva
-        if (_unlocked) setState(() => _unlocked = false);
+        // Ha cancel / elutasítás: maradjon zárva
+        _needsAuth = true;
+        if (_unlocked) {
+          _stopPolling();
+          setState(() => _unlocked = false);
+        }
       }
-    } on PlatformException {
-      // Nem kérted a "telefonlock ellenőrzést", szóval itt nem okoskodunk:
-      // ha az OS nem tud authot, inkább engedjük, ne legyen téglává.
+    } on PlatformException catch (e) {
+      // Ha az OS nem tud authot, ne legyen tégla. (Ha ezt inkább TILTSUK, szólj.)
       if (!mounted) return;
+      _snack("AUTH hiba: ${e.code}");
+      _needsAuth = false;
       if (!_unlocked) {
         setState(() => _unlocked = true);
         _startPolling();
@@ -105,16 +134,16 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
   }
 
   void _startPolling() {
+    pollTimer?.cancel();
     _refreshOnce(); // initial fetch
     _sendCmd("front", "STATUS", silent: true); // one-time confirm on launch
     pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _refreshOnce());
   }
 
-  Map<String, String> _headers() => {
-        "X-API-Key": apiKey,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      };
+  void _stopPolling() {
+    pollTimer?.cancel();
+    pollTimer = null;
+  }
 
   Future<void> _refreshOnce() async {
     await _refreshLock("front");
@@ -127,7 +156,6 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
       final res = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 3));
 
       if (res.statusCode == 404) {
-        // nincs telepítve
         if (!mounted) return;
         setState(() {
           locks[id]!.state = "NOTFOUND";
@@ -166,11 +194,10 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
   Future<void> _sendCmd(String id, String cmd, {bool silent = false}) async {
     final lock = locks[id]!;
     if (lock.state == "NOTFOUND") return;
-    if (lock.pending) return; // spamvédelem
+    if (lock.pending) return;
 
     final upper = cmd.toUpperCase().trim();
 
-    // Pending UI azonnal
     if (!mounted) return;
     setState(() {
       lock.pending = true;
@@ -181,7 +208,6 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
               : "Frissítés...";
     });
 
-    // Ha nem jön vissza friss állapot, ne ragadjon be
     final timeout = Timer(const Duration(seconds: 8), () {
       if (!mounted) return;
       setState(() {
@@ -207,7 +233,6 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
         return;
       }
 
-      // Parancs után kérjünk STATUS-t is (refresh)
       if (upper != "STATUS") {
         await http
             .post(uri, headers: _headers(), body: jsonEncode({"cmd": "STATUS"}))
@@ -348,8 +373,10 @@ class LockCard extends StatelessWidget {
             ),
             if (lock.updatedAt != null) ...[
               const SizedBox(height: 4),
-              Text("Utolsó frissítés: ${lock.updatedAt}",
-                  style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                "Utolsó frissítés: ${lock.updatedAt}",
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
             const SizedBox(height: 12),
             Wrap(
