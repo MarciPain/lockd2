@@ -27,7 +27,7 @@ class LocksHome extends StatefulWidget {
 
 class _LocksHomeState extends State<LocksHome> {
   // TODO: később settings screen + secure storage
-  final String baseUrl = "http://62.112.193.204:6443"; // lockd URL (LAN/WAN)
+  final String baseUrl = "https://lockd.reas.hu:6443"; // lockd URL (LAN/WAN)
   final String apiKey = "2a45a442ead470916467464ab4f44b66";
 
   final Map<String, LockModel> locks = {
