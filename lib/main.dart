@@ -64,7 +64,7 @@ class _LocksHomeState extends State<LocksHome> {
 
   Future<void> _refreshLock(String id) async {
     try {
-      final uri = Uri.parse("$baseUrl/v1/locks/$id/state");
+      final uri = Uri.parse("$baseUrl/v1/locks/$id");
       final res = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 3));
 
       if (res.statusCode == 404) {
