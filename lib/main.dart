@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:local_auth/local_auth.dart';
 
 void main() => runApp(const LocksApp());
 
@@ -25,7 +28,7 @@ class LocksHome extends StatefulWidget {
   State<LocksHome> createState() => _LocksHomeState();
 }
 
-class _LocksHomeState extends State<LocksHome> {
+class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
   // TODO: később settings screen + secure storage
   final String baseUrl = "https://lockd.reas.hu:6443"; // lockd URL (LAN/WAN)
   final String apiKey = "2a45a442ead470916467464ab4f44b66";
@@ -37,18 +40,74 @@ class _LocksHomeState extends State<LocksHome> {
 
   Timer? pollTimer;
 
+  final LocalAuthentication _auth = LocalAuthentication();
+  bool _unlocked = false;
+  bool _authInProgress = false;
+
   @override
   void initState() {
     super.initState();
-    _refreshOnce(); // initial fetch
-    _sendCmd("front", "STATUS", silent: true); // one-time confirm on launch
-    pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _refreshOnce());
+    WidgetsBinding.instance.addObserver(this);
+    _gate(); // induláskor kérjen
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     pollTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // háttérből visszajövet is kérjen
+    if (state == AppLifecycleState.resumed) {
+      _gate();
+    }
+  }
+
+  Future<void> _gate() async {
+    if (_authInProgress) return;
+    _authInProgress = true;
+
+    try {
+      final ok = await _auth.authenticate(
+        localizedReason: 'VibeLock feloldás',
+        options: const AuthenticationOptions(
+          biometricOnly: false, // ujjlenyomat VAGY minta/PIN
+          stickyAuth: true,
+          useErrorDialogs: true,
+        ),
+      );
+
+      if (!mounted) return;
+
+      if (ok) {
+        if (!_unlocked) {
+          setState(() => _unlocked = true);
+          _startPolling();
+        }
+      } else {
+        // marad zárolva
+        if (_unlocked) setState(() => _unlocked = false);
+      }
+    } on PlatformException {
+      // Nem kérted a "telefonlock ellenőrzést", szóval itt nem okoskodunk:
+      // ha az OS nem tud authot, inkább engedjük, ne legyen téglává.
+      if (!mounted) return;
+      if (!_unlocked) {
+        setState(() => _unlocked = true);
+        _startPolling();
+      }
+    } finally {
+      _authInProgress = false;
+    }
+  }
+
+  void _startPolling() {
+    _refreshOnce(); // initial fetch
+    _sendCmd("front", "STATUS", silent: true); // one-time confirm on launch
+    pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _refreshOnce());
   }
 
   Map<String, String> _headers() => {
@@ -96,16 +155,12 @@ class _LocksHomeState extends State<LocksHome> {
         }
       });
     } catch (_) {
-      // csendben: a state úgyis OFFLINE lehet a backendben, ha akarod
+      // csendben
     }
   }
 
   bool _isFinalState(String s) {
-    return s == "Nyitva" ||
-        s == "Zárva" ||
-        s == "NOTFOUND" ||
-        s == "OFFLINE" ||
-        s == "Ismeretlen";
+    return s == "Nyitva" || s == "Zárva" || s == "NOTFOUND" || s == "OFFLINE" || s == "Ismeretlen";
   }
 
   Future<void> _sendCmd(String id, String cmd, {bool silent = false}) async {
@@ -159,7 +214,6 @@ class _LocksHomeState extends State<LocksHome> {
             .timeout(const Duration(seconds: 4));
       }
 
-      // pending oldódik, ha a pollingból jön Nyitva/Zárva
       timeout.cancel();
       await Future.delayed(const Duration(milliseconds: 200));
     } catch (e) {
@@ -177,9 +231,37 @@ class _LocksHomeState extends State<LocksHome> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  Widget _footer(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Text(
+          "VibeLock 1.0",
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final list = locks.values.toList();
+
+    if (!_unlocked) {
+      return Scaffold(
+        appBar: AppBar(title: const Text("Zárak")),
+        body: Center(
+          child: FilledButton(
+            onPressed: _gate,
+            child: const Text("Feloldás"),
+          ),
+        ),
+        bottomNavigationBar: _footer(context),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Zárak"),
@@ -202,6 +284,7 @@ class _LocksHomeState extends State<LocksHome> {
         separatorBuilder: (_, __) => const SizedBox(height: 10),
         itemCount: list.length,
       ),
+      bottomNavigationBar: _footer(context),
     );
   }
 }
@@ -239,7 +322,9 @@ class LockCard extends StatelessWidget {
     required this.onStatus,
   });
 
-  bool get disabled => lock.state == "NOTFOUND" || lock.pending;
+  bool get _baseDisabled => lock.state == "NOTFOUND" || lock.pending;
+  bool get _unlockDisabled => _baseDisabled || lock.state == "Nyitva";
+  bool get _lockDisabled => _baseDisabled || lock.state == "Zárva";
 
   @override
   Widget build(BuildContext context) {
@@ -272,11 +357,11 @@ class LockCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 FilledButton(
-                  onPressed: disabled ? null : onUnlock,
+                  onPressed: _unlockDisabled ? null : onUnlock,
                   child: const Text("Nyit"),
                 ),
                 FilledButton(
-                  onPressed: disabled ? null : onLock,
+                  onPressed: _lockDisabled ? null : onLock,
                   child: const Text("Zár"),
                 ),
                 OutlinedButton(
