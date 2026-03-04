@@ -8,21 +8,60 @@ import 'package:local_auth/local_auth.dart';
 
 void main() => runApp(const LocksApp());
 
-class LocksApp extends StatelessWidget {
+class LocksApp extends StatefulWidget {
   const LocksApp({super.key});
+
+  @override
+  State<LocksApp> createState() => _LocksAppState();
+}
+
+class _LocksAppState extends State<LocksApp> {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  void _toggleTheme() {
+    setState(() {
+      if (_themeMode == ThemeMode.light) {
+        _themeMode = ThemeMode.dark;
+      } else if (_themeMode == ThemeMode.dark) {
+        _themeMode = ThemeMode.system;
+      } else {
+        _themeMode = ThemeMode.light;
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Zárak',
-      theme: ThemeData(useMaterial3: true),
-      home: const LocksHome(),
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Colors.blue,
+        brightness: Brightness.light,
+      ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Colors.blue,
+        brightness: Brightness.dark,
+      ),
+      themeMode: _themeMode,
+      home: LocksHome(
+        themeMode: _themeMode,
+        onThemeToggle: _toggleTheme,
+      ),
     );
   }
 }
 
 class LocksHome extends StatefulWidget {
-  const LocksHome({super.key});
+  final ThemeMode themeMode;
+  final VoidCallback onThemeToggle;
+
+  const LocksHome({
+    super.key,
+    required this.themeMode,
+    required this.onThemeToggle,
+  });
 
   @override
   State<LocksHome> createState() => _LocksHomeState();
@@ -170,11 +209,13 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
 
       final data = jsonDecode(res.body);
       final newState = (data["state"] ?? "Ismeretlen").toString();
+      final newBatt = data["battery"]?.toString();
       final updatedAt = data["updated_at"]?.toString();
 
       if (!mounted) return;
       setState(() {
         locks[id]!.state = newState;
+        locks[id]!.battery = newBatt;
         locks[id]!.updatedAt = updatedAt;
 
         if (locks[id]!.pending && _isFinalState(newState)) {
@@ -262,12 +303,23 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Text(
-          "VibeLock 1.0",
+          "VibeLock 1.1",
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ),
     );
+  }
+
+  IconData _getThemeIcon() {
+    switch (widget.themeMode) {
+      case ThemeMode.light:
+        return Icons.light_mode;
+      case ThemeMode.dark:
+        return Icons.dark_mode;
+      case ThemeMode.system:
+        return Icons.brightness_auto;
+    }
   }
 
   @override
@@ -276,11 +328,30 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
 
     if (!_unlocked) {
       return Scaffold(
-        appBar: AppBar(title: const Text("Zárak")),
+        appBar: AppBar(
+          title: const Text("VibeLock"),
+          actions: [
+            IconButton(
+              onPressed: widget.onThemeToggle,
+              icon: Icon(_getThemeIcon()),
+            ),
+          ],
+        ),
         body: Center(
-          child: FilledButton(
-            onPressed: _gate,
-            child: const Text("Feloldás"),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.lock_outline, size: 80, color: Colors.blue),
+              const SizedBox(height: 24),
+              FilledButton.tonalIcon(
+                onPressed: _gate,
+                icon: const Icon(Icons.fingerprint),
+                label: const Text("Feloldás"),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                ),
+              ),
+            ],
           ),
         ),
         bottomNavigationBar: _footer(context),
@@ -291,6 +362,10 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
       appBar: AppBar(
         title: const Text("Zárak"),
         actions: [
+          IconButton(
+            onPressed: widget.onThemeToggle,
+            icon: Icon(_getThemeIcon()),
+          ),
           IconButton(
             onPressed: _refreshOnce,
             icon: const Icon(Icons.refresh),
@@ -318,6 +393,7 @@ class LockModel {
   final String id;
   final String name;
   String state;
+  String? battery;
   String? updatedAt;
 
   bool pending;
@@ -327,6 +403,7 @@ class LockModel {
     required this.id,
     required this.name,
     this.state = "Ismeretlen",
+    this.battery,
     this.updatedAt,
     this.pending = false,
     this.pendingLabel,
@@ -356,54 +433,169 @@ class LockCard extends StatelessWidget {
     final shownState = lock.pending ? (lock.pendingLabel ?? "…") : lock.state;
 
     return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(lock.name, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("Állapot: ", style: Theme.of(context).textTheme.titleMedium),
-                Flexible(
-                  child: Text(shownState, style: Theme.of(context).textTheme.titleMedium),
+                Expanded(
+                  child: Text(
+                    lock.name,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  ),
                 ),
+                if (lock.battery != null) _buildBatteryIndicator(context, lock.battery!),
               ],
             ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _getStateIcon(lock.state),
+                    size: 18,
+                    color: _getStateColor(lock.state),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    shownState,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: _getStateColor(lock.state),
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
+              ),
+            ),
             if (lock.updatedAt != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 8),
               Text(
                 "Utolsó frissítés: ${lock.updatedAt}",
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 8,
+            const SizedBox(height: 16),
+            Row(
               children: [
-                FilledButton(
-                  onPressed: _unlockDisabled ? null : onUnlock,
-                  child: const Text("Nyit"),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _unlockDisabled ? null : onUnlock,
+                    icon: const Icon(Icons.lock_open),
+                    label: const Text("NYIT"),
+                  ),
                 ),
-                FilledButton(
-                  onPressed: _lockDisabled ? null : onLock,
-                  child: const Text("Zár"),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _lockDisabled ? null : onLock,
+                    icon: const Icon(Icons.lock),
+                    label: const Text("ZÁR"),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                      foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
+                  ),
                 ),
-                OutlinedButton(
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
                   onPressed: lock.pending ? null : onStatus,
-                  child: const Text("Frissít"),
+                  icon: const Icon(Icons.sync),
                 ),
               ],
             ),
             if (lock.state == "NOTFOUND") ...[
               const SizedBox(height: 8),
-              Text("Nincs telepítve.", style: Theme.of(context).textTheme.bodyMedium),
+              const Text("Nincs telepítve.", style: TextStyle(color: Colors.red)),
             ],
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildBatteryIndicator(BuildContext context, String battStr) {
+    final val = int.tryParse(battStr) ?? 0;
+    IconData icon;
+    Color color;
+
+    if (val > 85) {
+      icon = Icons.battery_full;
+      color = Colors.green;
+    } else if (val > 65) {
+      icon = Icons.battery_6_bar;
+      color = Colors.green;
+    } else if (val > 45) {
+      icon = Icons.battery_4_bar;
+      color = Colors.orange;
+    } else if (val > 25) {
+      icon = Icons.battery_2_bar;
+      color = Colors.orange;
+    } else {
+      icon = Icons.battery_alert;
+      color = Colors.red;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 4),
+          Text(
+            "$val%",
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getStateIcon(String state) {
+    switch (state) {
+      case "Nyitva":
+        return Icons.lock_open;
+      case "Zárva":
+        return Icons.lock;
+      case "Zárás...":
+      case "Nyitás...":
+        return Icons.autorenew;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  Color _getStateColor(String state) {
+    switch (state) {
+      case "Nyitva":
+        return Colors.green;
+      case "Zárva":
+        return Colors.red;
+      case "Zárás...":
+      case "Nyitás...":
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
   }
 }
