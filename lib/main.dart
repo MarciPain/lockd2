@@ -266,6 +266,10 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      if (state == AppLifecycleState.inactive && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+        // Desktop: focus loss shouldn't lock the app
+        return;
+      }
       _needsAuth = true;
       if (_unlocked) {
         _stopPolling();
@@ -303,8 +307,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
       if (apiKey == null || apiKey!.isEmpty || baseUrl == null || baseUrl!.isEmpty) {
         _showKeyDialog();
       } else {
-        await _fetchLocks();
-        _startPolling();
+        _fetchLocks().then((_) => _startPolling());
       }
       return;
     }
@@ -328,12 +331,11 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
         _needsAuth = false;
         if (!_unlocked) {
           setState(() => _unlocked = true);
-          if (apiKey == null || apiKey!.isEmpty || baseUrl == null || baseUrl!.isEmpty) {
-            _showKeyDialog();
-          } else {
-            await _fetchLocks();
-            _startPolling();
-          }
+            if (apiKey == null || apiKey!.isEmpty || baseUrl == null || baseUrl!.isEmpty) {
+              _showKeyDialog();
+            } else {
+              _fetchLocks().then((_) => _startPolling());
+            }
         }
       } else {
         _needsAuth = true;
@@ -503,7 +505,8 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
         lock.battery = newBatt;
         lock.updatedAt = updatedAt;
 
-        if (lock.pending && _isFinalState(newState)) {
+        // Force clear pending if we get any authoritative state from server
+        if (lock.pending) {
           lock.pending = false;
           lock.pendingLabel = null;
         }
@@ -599,33 +602,20 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
         body: jsonEncode({"cmd": upper}),
       ).timeout(const Duration(seconds: 8));
 
+      DebugLogger.log("Cmd response: ${res.statusCode} for ${lock.id}");
       if (res.statusCode != 200) {
-        DebugLogger.log("Cmd error: ${res.statusCode} - ${res.body}");
-        timeout.cancel();
-        if (!mounted) return;
-        setState(() {
-          lock.pending = false;
-          lock.pendingLabel = null;
-        });
         if (!silent) _snack("${_t('error')}: ${res.body}");
         return;
       }
 
-      // If it was a control command, trigger a status refresh soon
+      // Successful command! Refresh quickly.
       if (upper != "STATUS") {
-        await Future.delayed(const Duration(milliseconds: 500));
-        _refreshLock(lock);
+        await Future.delayed(const Duration(milliseconds: 800));
+        await _refreshLock(lock);
       }
-
-      timeout.cancel();
     } catch (e) {
       DebugLogger.log("Cmd failure: $e");
-      timeout.cancel();
       if (!mounted) return;
-      setState(() {
-        lock.pending = false;
-        lock.pendingLabel = null;
-      });
       if (!silent) {
         String msg = e.toString();
         if (msg.contains("1225")) {
@@ -634,6 +624,14 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
           msg = _t('proto_mismatch_hint');
         }
         _snack("${_t('network_error')}: $msg");
+      }
+    } finally {
+      timeout.cancel();
+      if (mounted) {
+        setState(() {
+          lock.pending = false;
+          lock.pendingLabel = null;
+        });
       }
     }
   }
@@ -856,15 +854,15 @@ class LockCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    _getStateIcon(lock.state),
+                    lock.pending ? Icons.autorenew : _getStateIcon(lock.state),
                     size: 18,
-                    color: _getStateColor(lock.state),
+                    color: lock.pending ? Colors.orange : _getStateColor(lock.state),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     shownState,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: _getStateColor(lock.state),
+                          color: lock.pending ? Colors.orange : _getStateColor(lock.state),
                           fontWeight: FontWeight.w600,
                         ),
                   ),
