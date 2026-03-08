@@ -505,8 +505,8 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
         lock.battery = newBatt;
         lock.updatedAt = updatedAt;
 
-        // Force clear pending if we get any authoritative state from server
-        if (lock.pending) {
+        // Only clear pending if we reached a final state (Open/Closed/Error)
+        if (lock.pending && _isFinalState(newState)) {
           lock.pending = false;
           lock.pendingLabel = null;
         }
@@ -517,8 +517,12 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
   }
 
   bool _isFinalState(String s) {
-    return s == "Nyitva" || s == "Zárva" || s == "NOTFOUND" || s == "OFFLINE" || s == "Ismeretlen" ||
-           s == "Open" || s == "Closed" || s == "Unknown";
+    if (s.contains("...") || s.contains("…")) return false;
+    final finalStates = {
+      "Nyitva", "Zárva", "NOTFOUND", "OFFLINE", "Ismeretlen",
+      "Open", "Closed", "Unknown", "Opened", "Locked", "Unlocked"
+    };
+    return finalStates.contains(s);
   }
 
   String _getPendingLabel(String upper) {
@@ -604,17 +608,22 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
 
       DebugLogger.log("Cmd response: ${res.statusCode} for ${lock.id}");
       if (res.statusCode != 200) {
+        if (mounted) setState(() { lock.pending = false; lock.pendingLabel = null; });
         if (!silent) _snack("${_t('error')}: ${res.body}");
         return;
       }
 
-      // Successful command! Refresh quickly.
+      // Successful command! Refresh quickly and potentially multiple times
       if (upper != "STATUS") {
-        await Future.delayed(const Duration(milliseconds: 800));
-        await _refreshLock(lock);
+        for (int i = 0; i < 3; i++) {
+          if (!lock.pending) break; 
+          await Future.delayed(Duration(milliseconds: 800 * (i + 1)));
+          await _refreshLock(lock);
+        }
       }
     } catch (e) {
       DebugLogger.log("Cmd failure: $e");
+      if (mounted) setState(() { lock.pending = false; lock.pendingLabel = null; });
       if (!mounted) return;
       if (!silent) {
         String msg = e.toString();
@@ -626,13 +635,9 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
         _snack("${_t('network_error')}: $msg");
       }
     } finally {
+      // We DON'T clear pending here automatically anymore. 
+      // It's cleared by _refreshLock (success) or the timeout (failure).
       timeout.cancel();
-      if (mounted) {
-        setState(() {
-          lock.pending = false;
-          lock.pendingLabel = null;
-        });
-      }
     }
   }
 
