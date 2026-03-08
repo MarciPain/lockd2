@@ -1,33 +1,42 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 class Translations {
-  static const Map<String, Map<String, String>> data = {
+  static final data = {
     'hu': {
       'app_title': 'Lockd 2.0',
-      'unlock_bt': 'Feloldás',
-      'auth_reason': 'Lockd feloldás',
-      'set_key_title': 'API Kulcs beállítása',
-      'set_key_hint': 'Másold be az auth kulcsodat (X-API-Key):',
-      'set_key_input_hint': 'Kulcs beillesztése...',
-      'cancel': 'Mégse',
-      'save': 'Mentés',
+      'unlock_bt': 'FELOLDÁS',
+      'invalid_key': 'Érvénytelen kulcs!',
       'error': 'Hiba',
       'network_error': 'Hálózati hiba',
-      'invalid_key': 'Érvénytelen API kulcs!',
+      'conn_refused_hint': 'A szerver visszautasította a kapcsolatot. Ellenőrizd a címet (0.0.0.0-n figyel?), a portot és a tűzfalat!',
+      'proto_mismatch_hint': 'Protokoll hiba: HTTPS-t használsz, de a szerver valószínűleg csak sima HTTP-t tud. Írd át http://-re!',
+      'view_logs': 'NAPLÓ MEGNYITÁSA',
+      'logs_title': 'Rendszernapló',
+      'set_key_title': 'Beállítások',
+      'set_key_hint': 'API Kulcs:',
+      'set_key_input_hint': 'Másold be a kulcsot...',
+      'set_url_hint': 'Szerver URL (pl. lockd.reas.hu:8089):',
+      'url_input_hint': 'Szerver címe...',
+      'save': 'MENTÉS',
+      'cancel': 'MÉGSE',
       'state_open': 'Nyitva',
       'state_closed': 'Zárva',
+      'state_unknown': 'Ismeretlen',
+      'state_not_installed': 'Nincs telepítve',
+      'auth_reason': 'Lockd feloldás',
       'state_locking': 'Zárás...',
       'state_unlocking': 'Nyitás...',
       'state_refreshing': 'Frissítés...',
-      'state_unknown': 'Ismeretlen',
-      'state_not_installed': 'Nincs telepítve.',
       'btn_lock': 'ZÁR',
       'btn_unlock': 'NYIT',
       'btn_open': 'NYITÁS',
@@ -36,28 +45,32 @@ class Translations {
       'tooltip_set_key': 'Kulcs beállítása',
       'tooltip_refresh': 'Frissít',
       'open_type_error': 'Hiba: Az \'OPEN\' típusú zár nem zárható.',
-      'set_url_hint': 'Add meg a szerver címet (pl. https://...):',
-      'url_input_hint': 'https://domain.com:6443',
     },
     'en': {
       'app_title': 'Lockd 2.0',
-      'unlock_bt': 'Unlock App',
-      'auth_reason': 'Unlock Lockd',
-      'set_key_title': 'Setup Server & Key',
-      'set_key_hint': 'Paste your auth key (X-API-Key):',
-      'set_key_input_hint': 'Paste key...',
-      'cancel': 'Cancel',
-      'save': 'Save',
+      'unlock_bt': 'UNLOCK',
+      'invalid_key': 'Invalid Key!',
       'error': 'Error',
       'network_error': 'Network error',
-      'invalid_key': 'Invalid API Key!',
+      'conn_refused_hint': 'Connection refused. Is the server listening on 0.0.0.0? Check firewall!',
+      'proto_mismatch_hint': 'Protocol mismatch: Using HTTPS on a plain HTTP server? Try http:// instead!',
+      'view_logs': 'VIEW LOGS',
+      'logs_title': 'System Logs',
+      'set_key_title': 'Settings',
+      'set_key_hint': 'API Key:',
+      'set_key_input_hint': 'Paste your key here...',
+      'set_url_hint': 'Server URL (e.g. lockd.reas.hu:8089):',
+      'url_input_hint': 'Server address...',
+      'save': 'SAVE',
+      'cancel': 'CANCEL',
       'state_open': 'Open',
       'state_closed': 'Closed',
+      'state_unknown': 'Unknown',
+      'state_not_installed': 'Not Installed',
+      'auth_reason': 'Unlock Lockd',
       'state_locking': 'Locking...',
       'state_unlocking': 'Opening...',
       'state_refreshing': 'Refreshing...',
-      'state_unknown': 'Unknown',
-      'state_not_installed': 'Not installed.',
       'btn_lock': 'LOCK',
       'btn_unlock': 'UNLOCK',
       'btn_open': 'OPEN',
@@ -66,13 +79,46 @@ class Translations {
       'tooltip_set_key': 'Setup',
       'tooltip_refresh': 'Refresh',
       'open_type_error': 'Error: OPEN type locks cannot be locked.',
-      'set_url_hint': 'Enter server URL (e.g. https://...):',
-      'url_input_hint': 'https://domain.com:6443',
     }
   };
 }
 
-void main() => runApp(const LocksApp());
+class DebugLogger {
+  static final List<String> _logs = [];
+  
+  static void log(String msg) async {
+    final timestamp = DateTime.now().toIso8601String().substring(11, 19);
+    final line = "[$timestamp] $msg";
+    _logs.add(line);
+    if (_logs.length > 100) _logs.removeAt(0);
+    debugPrint(line);
+
+    if (Platform.isWindows) {
+      try {
+        final docDir = await getApplicationSupportDirectory();
+        final logFile = File(p.join(docDir.path, 'debug.log'));
+        await logFile.writeAsString("$line\n", mode: FileMode.append);
+      } catch (e) {
+        debugPrint("Failed to write to log file: $e");
+      }
+    }
+  }
+
+  static String get all => _logs.join("\n");
+}
+
+void main() {
+  HttpOverrides.global = MyHttpOverrides();
+  runApp(const LocksApp());
+}
+
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+  }
+}
 
 class LocksApp extends StatefulWidget {
   const LocksApp({super.key});
@@ -351,6 +397,11 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
           ),
         ),
         actions: [
+          TextButton(
+            onPressed: _showLogs,
+            child: Text(_t('view_logs')),
+          ),
+          const Spacer(),
           if (apiKey != null && apiKey!.isNotEmpty && baseUrl != null && baseUrl!.isNotEmpty)
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -387,30 +438,41 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
 
   Future<void> _fetchLocks() async {
     if (apiKey == null || apiKey!.isEmpty || baseUrl == null || baseUrl!.isEmpty) return;
+    DebugLogger.log("Fetching locks from $baseUrl...");
     try {
       final uri = Uri.parse("$baseUrl/v1/locks");
       final res = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 5));
 
       if (res.statusCode == 401) {
+        DebugLogger.log("Auth failed (401)");
         _snack(_t('invalid_key'));
         _showKeyDialog();
         return;
       }
 
       if (res.statusCode != 200) {
+        DebugLogger.log("API Error: ${res.statusCode} - ${res.body}");
         _snack("API ${_t('error')} (lista): ${res.statusCode}");
         return;
       }
 
       final data = jsonDecode(res.body);
       final List rawList = data["locks"] ?? [];
+      DebugLogger.log("Received ${rawList.length} locks");
 
       if (!mounted) return;
       setState(() {
         locks = rawList.map((j) => LockModel.fromJson(j)).toList();
       });
     } catch (e) {
-      _snack("${_t('network_error')}: $e");
+      DebugLogger.log("Network error: $e");
+      String msg = e.toString();
+      if (msg.contains("1225")) {
+        msg = _t('conn_refused_hint');
+      } else if (msg.contains("WRONG_VERSION_NUMBER")) {
+        msg = _t('proto_mismatch_hint');
+      }
+      _snack("${_t('network_error')}: $msg");
     }
   }
 
@@ -454,6 +516,46 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
            s == "Open" || s == "Closed" || s == "Unknown";
   }
 
+  String _getPendingLabel(String upper) {
+    if (upper == "LOCK") return _t('state_locking');
+    if (upper == "UNLOCK") return _t('state_unlocking');
+    return _t('state_refreshing');
+  }
+
+  void _showLogs() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(_t('logs_title')),
+        content: Container(
+          width: double.maxFinite,
+          height: 400,
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.all(8),
+          child: SingleChildScrollView(
+            child: Text(
+              DebugLogger.all.isEmpty ? "No logs yet." : DebugLogger.all,
+              style: const TextStyle(
+                color: Colors.greenAccent,
+                fontFamily: 'monospace',
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _sendCmd(LockModel lock, String cmd, {bool silent = false}) async {
     if (lock.state == "NOTFOUND") return;
     if (lock.pending) return;
@@ -467,15 +569,15 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
     }
 
     if (!mounted) return;
-    setState(() {
-      lock.pending = true;
-      lock.pendingLabel = (upper == "LOCK")
-          ? _t('state_locking')
-          : (upper == "UNLOCK")
-              ? _t('state_unlocking')
-              : _t('state_refreshing');
-    });
 
+    if (!silent) {
+      setState(() {
+        lock.pending = true;
+        lock.pendingLabel = _getPendingLabel(upper);
+      });
+    }
+
+    DebugLogger.log("Sending command: $upper to ${lock.id}...");
     final timeout = Timer(const Duration(seconds: 10), () {
       if (!mounted) return;
       if (lock.pending) {
@@ -483,16 +585,20 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
           lock.pending = false;
           lock.pendingLabel = null;
         });
+        _snack("${_t('error')}: Timeout");
       }
     });
 
     try {
       final uri = Uri.parse("$baseUrl/v1/locks/${lock.id}/cmd");
-      final res = await http
-          .post(uri, headers: _headers(), body: jsonEncode({"cmd": upper}))
-          .timeout(const Duration(seconds: 5));
+      final res = await http.post(
+        uri,
+        headers: _headers(),
+        body: jsonEncode({"cmd": upper}),
+      ).timeout(const Duration(seconds: 8));
 
       if (res.statusCode != 200) {
+        DebugLogger.log("Cmd error: ${res.statusCode} - ${res.body}");
         timeout.cancel();
         if (!mounted) return;
         setState(() {
@@ -511,13 +617,22 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
 
       timeout.cancel();
     } catch (e) {
+      DebugLogger.log("Cmd failure: $e");
       timeout.cancel();
       if (!mounted) return;
       setState(() {
         lock.pending = false;
         lock.pendingLabel = null;
       });
-      if (!silent) _snack("${_t('network_error')}: $e");
+      if (!silent) {
+        String msg = e.toString();
+        if (msg.contains("1225")) {
+          msg = _t('conn_refused_hint');
+        } else if (msg.contains("WRONG_VERSION_NUMBER")) {
+          msg = _t('proto_mismatch_hint');
+        }
+        _snack("${_t('network_error')}: $msg");
+      }
     }
   }
 
