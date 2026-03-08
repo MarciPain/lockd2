@@ -329,6 +329,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
               onPressed: () => Navigator.pop(context),
               child: Text(_t('cancel')),
             ),
+          FilledButton(
             onPressed: () {
               final url = urlController.text.trim();
               final key = keyController.text.trim();
