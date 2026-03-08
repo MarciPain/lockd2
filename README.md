@@ -1,17 +1,21 @@
-# locks_app
+# Lockd2 Mobile App
 
-A new Flutter project.
+A Flutter application for controlling remote locks. This app communicates with the `lockd-go` backend to manage security and access.
 
-## Getting Started
+## Features
+- **Remote Control**: Open or toggle locks from your phone.
+- **ACL Support**: Only shows the locks you have permission to access.
+- **Battery Status**: View the battery levels of your connected locks.
 
-This project is a starting point for a Flutter application.
+## Automatic Builds
+This repository is configured with **GitHub Actions**. Every time you push code to the `main` branch, a new Android APK is automatically built.
 
-A few resources to get you started if this is your first Flutter project:
+You can find the compiled APKs in the **Actions** tab of the GitHub repository under the latest successful "Build Android" run.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Setup
+1. Install [Flutter](https://docs.flutter.dev/get-started/install).
+2. Run `flutter pub get` to install dependencies.
+3. Configure your API key and server address in the app settings.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
+Built with Flutter.
