@@ -613,8 +613,20 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
         return;
       }
 
-      // Successful command! Refresh quickly and potentially multiple times
+      // Successful command! To avoid getting the old cached final state, 
+      // we immediately ask the server to trigger a STATUS request to the hardware,
+      // just like v1 did. This ensures the hardware pushes its "in-progress" state.
       if (upper != "STATUS") {
+        try {
+          await http.post(
+            uri,
+            headers: _headers(),
+            body: jsonEncode({"cmd": "STATUS"}),
+          ).timeout(const Duration(seconds: 4));
+        } catch (_) {
+          // ignore status request errors
+        }
+
         for (int i = 0; i < 3; i++) {
           if (!lock.pending) break; 
           await Future.delayed(Duration(milliseconds: 800 * (i + 1)));
