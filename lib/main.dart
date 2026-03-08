@@ -368,9 +368,11 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
       barrierDismissible: apiKey != null && apiKey!.isNotEmpty && baseUrl != null && baseUrl!.isNotEmpty,
       builder: (context) => AlertDialog(
         title: Text(_t('set_key_title')),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+        content: SizedBox(
+          width: 400,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
             children: [
               Text(_t('set_url_hint')),
               const SizedBox(height: 8),
@@ -401,7 +403,6 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
             onPressed: _showLogs,
             child: Text(_t('view_logs')),
           ),
-          const Spacer(),
           if (apiKey != null && apiKey!.isNotEmpty && baseUrl != null && baseUrl!.isNotEmpty)
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -528,7 +529,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
       builder: (context) => AlertDialog(
         title: Text(_t('logs_title')),
         content: Container(
-          width: double.maxFinite,
+          width: 600,
           height: 400,
           decoration: BoxDecoration(
             color: Colors.black,
