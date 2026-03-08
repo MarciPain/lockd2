@@ -162,6 +162,9 @@ class LocksHome extends StatefulWidget {
 }
 
 class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
+  // SET TO false TO DISABLE BIOMETRICS FOR TESTING / SCREENSHOTS
+  bool _useAuth = true;
+
   String? baseUrl;
   String? apiKey;
 
@@ -236,6 +239,22 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
       };
 
   Future<void> _gate() async {
+    if (!_useAuth) {
+      if (mounted) {
+        setState(() {
+          _unlocked = true;
+          _needsAuth = false;
+        });
+      }
+      if (apiKey == null || apiKey!.isEmpty || baseUrl == null || baseUrl!.isEmpty) {
+        _showKeyDialog();
+      } else {
+        await _fetchLocks();
+        _startPolling();
+      }
+      return;
+    }
+
     if (_authInProgress) return;
     _authInProgress = true;
 
