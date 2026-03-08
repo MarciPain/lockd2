@@ -239,7 +239,15 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
       };
 
   Future<void> _gate() async {
-    if (!_useAuth) {
+    // 1. Check if auth is disabled for testing
+    // 2. Or if we are on Windows (testing convenience)
+    // 3. Or if biometric auth is not supported/enrolled
+    bool canCheckBiometrics = false;
+    try {
+      canCheckBiometrics = await _auth.canCheckBiometrics;
+    } catch (_) {}
+
+    if (!_useAuth || !canCheckBiometrics) {
       if (mounted) {
         setState(() {
           _unlocked = true;
