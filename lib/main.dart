@@ -398,8 +398,9 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
             ],
           ),
         ),
-        actions: [
-          TextButton(
+      ),
+      actions: [
+        TextButton(
             onPressed: _showLogs,
             child: Text(_t('view_logs')),
           ),
