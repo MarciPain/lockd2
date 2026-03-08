@@ -5,6 +5,7 @@ A Flutter application for controlling remote locks. This app is designed to work
 ## Features
 - **Remote Control**: Open or toggle locks from your phone.
 - **ACL Support**: Only shows the locks you have permission to access (managed on the server).
+- **Multi-language Support**: Fully localized in Hungarian and English (expandable).
 - **Battery Status**: View the battery levels of your connected locks.
 
 ## Automatic Builds

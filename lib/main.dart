@@ -36,13 +36,15 @@ class Translations {
       'tooltip_set_key': 'Kulcs beállítása',
       'tooltip_refresh': 'Frissít',
       'open_type_error': 'Hiba: Az \'OPEN\' típusú zár nem zárható.',
+      'set_url_hint': 'Add meg a szerver címet (pl. https://...):',
+      'url_input_hint': 'https://domain.com:6443',
     },
     'en': {
       'app_title': 'Lockd 2.0',
       'unlock_bt': 'Unlock App',
       'auth_reason': 'Unlock Lockd',
-      'set_key_title': 'Set API Key',
-      'set_key_hint': 'Paste your auth key here (X-API-Key):',
+      'set_key_title': 'Setup Server & Key',
+      'set_key_hint': 'Paste your auth key (X-API-Key):',
       'set_key_input_hint': 'Paste key...',
       'cancel': 'Cancel',
       'save': 'Save',
@@ -61,9 +63,11 @@ class Translations {
       'btn_open': 'OPEN',
       'btn_pulse': 'TRIGGER',
       'last_refresh': 'Last refresh',
-      'tooltip_set_key': 'Set Key',
+      'tooltip_set_key': 'Setup',
       'tooltip_refresh': 'Refresh',
       'open_type_error': 'Error: OPEN type locks cannot be locked.',
+      'set_url_hint': 'Enter server URL (e.g. https://...):',
+      'url_input_hint': 'https://domain.com:6443',
     }
   };
 }
@@ -106,7 +110,10 @@ class _LocksAppState extends State<LocksApp> {
   }
 
   void _toggleLanguage() async {
-    final next = _locale == 'hu' ? 'en' : 'hu';
+    final keys = Translations.data.keys.toList();
+    final currentIndex = keys.indexOf(_locale);
+    final nextIndex = (currentIndex + 1) % keys.length;
+    final next = keys[nextIndex];
     await _storage.write(key: 'locale', value: next);
     setState(() => _locale = next);
   }
@@ -155,8 +162,7 @@ class LocksHome extends StatefulWidget {
 }
 
 class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
-  // TODO: később settings screen a URL-nek is
-  final String baseUrl = "https://lockd.reas.hu:6443";
+  String? baseUrl;
   String? apiKey;
 
   final _storage = const FlutterSecureStorage();
@@ -180,12 +186,24 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
 
   Future<void> _loadKey() async {
     final key = await _storage.read(key: 'api_key');
-    if (mounted) setState(() => apiKey = key);
+    final url = await _storage.read(key: 'server_url');
+    if (mounted) {
+      setState(() {
+        apiKey = key;
+        baseUrl = url;
+      });
+    }
   }
 
-  Future<void> _saveKey(String key) async {
+  Future<void> _saveKey(String url, String key) async {
+    await _storage.write(key: 'server_url', value: url);
     await _storage.write(key: 'api_key', value: key);
-    if (mounted) setState(() => apiKey = key);
+    if (mounted) {
+      setState(() {
+        baseUrl = url;
+        apiKey = key;
+      });
+    }
     _refreshOnce();
   }
 
@@ -237,7 +255,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
         _needsAuth = false;
         if (!_unlocked) {
           setState(() => _unlocked = true);
-          if (apiKey == null || apiKey!.isEmpty) {
+          if (apiKey == null || apiKey!.isEmpty || baseUrl == null || baseUrl!.isEmpty) {
             _showKeyDialog();
           } else {
             await _fetchLocks();
@@ -257,7 +275,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
       _needsAuth = false;
       if (!_unlocked) {
         setState(() => _unlocked = true);
-        if (apiKey == null || apiKey!.isEmpty) {
+        if (apiKey == null || apiKey!.isEmpty || baseUrl == null || baseUrl!.isEmpty) {
           _showKeyDialog();
         } else {
           _fetchLocks().then((_) => _startPolling());
@@ -269,38 +287,53 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
   }
 
   void _showKeyDialog() {
-    final controller = TextEditingController(text: apiKey);
+    final urlController = TextEditingController(text: baseUrl);
+    final keyController = TextEditingController(text: apiKey);
+    
     showDialog(
       context: context,
-      barrierDismissible: apiKey != null && apiKey!.isNotEmpty,
+      barrierDismissible: apiKey != null && apiKey!.isNotEmpty && baseUrl != null && baseUrl!.isNotEmpty,
       builder: (context) => AlertDialog(
         title: Text(_t('set_key_title')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(_t('set_key_hint')),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                hintText: _t('set_key_input_hint'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_t('set_url_hint')),
+              const SizedBox(height: 8),
+              TextField(
+                controller: urlController,
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  hintText: _t('url_input_hint'),
+                ),
+                keyboardType: TextInputType.url,
               ),
-              autofocus: true,
-            ),
-          ],
+              const SizedBox(height: 16),
+              Text(_t('set_key_hint')),
+              const SizedBox(height: 8),
+              TextField(
+                controller: keyController,
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  hintText: _t('set_key_input_hint'),
+                ),
+                autofocus: apiKey == null || apiKey!.isEmpty,
+              ),
+            ],
+          ),
         ),
         actions: [
-          if (apiKey != null && apiKey!.isNotEmpty)
+          if (apiKey != null && apiKey!.isNotEmpty && baseUrl != null && baseUrl!.isNotEmpty)
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Text(_t('cancel')),
             ),
-          FilledButton(
             onPressed: () {
-              final val = controller.text.trim();
-              if (val.isNotEmpty) {
-                _saveKey(val);
+              final url = urlController.text.trim();
+              final key = keyController.text.trim();
+              if (url.isNotEmpty && key.isNotEmpty) {
+                _saveKey(url, key);
                 Navigator.pop(context);
                 _fetchLocks().then((_) => _startPolling());
               }
@@ -313,7 +346,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
   }
 
   void _startPolling() {
-    if (apiKey == null || apiKey!.isEmpty) return;
+    if (apiKey == null || apiKey!.isEmpty || baseUrl == null || baseUrl!.isEmpty) return;
     pollTimer?.cancel();
     _refreshOnce();
     pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _refreshOnce());
@@ -325,7 +358,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
   }
 
   Future<void> _fetchLocks() async {
-    if (apiKey == null || apiKey!.isEmpty) return;
+    if (apiKey == null || apiKey!.isEmpty || baseUrl == null || baseUrl!.isEmpty) return;
     try {
       final uri = Uri.parse("$baseUrl/v1/locks");
       final res = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 5));
@@ -354,7 +387,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
   }
 
   Future<void> _refreshOnce() async {
-    if (apiKey == null || apiKey!.isEmpty) return;
+    if (apiKey == null || apiKey!.isEmpty || baseUrl == null || baseUrl!.isEmpty) return;
     for (var lock in locks) {
       await _refreshLock(lock);
     }
@@ -554,7 +587,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
           )
         ],
       ),
-      body: locks.isEmpty && (apiKey != null && apiKey!.isNotEmpty)
+      body: locks.isEmpty && (apiKey != null && apiKey!.isNotEmpty && baseUrl != null && baseUrl!.isNotEmpty)
           ? const Center(child: CircularProgressIndicator())
           : ListView.separated(
               padding: const EdgeInsets.all(12),
