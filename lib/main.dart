@@ -7,6 +7,67 @@ import 'package:http/http.dart' as http;
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+class Translations {
+  static const Map<String, Map<String, String>> data = {
+    'hu': {
+      'app_title': 'Lockd 2.0',
+      'unlock_bt': 'Feloldás',
+      'auth_reason': 'Lockd feloldás',
+      'set_key_title': 'API Kulcs beállítása',
+      'set_key_hint': 'Másold be az auth kulcsodat (X-API-Key):',
+      'set_key_input_hint': 'Kulcs beillesztése...',
+      'cancel': 'Mégse',
+      'save': 'Mentés',
+      'error': 'Hiba',
+      'network_error': 'Hálózati hiba',
+      'invalid_key': 'Érvénytelen API kulcs!',
+      'state_open': 'Nyitva',
+      'state_closed': 'Zárva',
+      'state_locking': 'Zárás...',
+      'state_unlocking': 'Nyitás...',
+      'state_refreshing': 'Frissítés...',
+      'state_unknown': 'Ismeretlen',
+      'state_not_installed': 'Nincs telepítve.',
+      'btn_lock': 'ZÁR',
+      'btn_unlock': 'NYIT',
+      'btn_open': 'NYITÁS',
+      'btn_pulse': 'GOMB',
+      'last_refresh': 'Utolsó frissítés',
+      'tooltip_set_key': 'Kulcs beállítása',
+      'tooltip_refresh': 'Frissít',
+      'open_type_error': 'Hiba: Az \'OPEN\' típusú zár nem zárható.',
+    },
+    'en': {
+      'app_title': 'Lockd 2.0',
+      'unlock_bt': 'Unlock App',
+      'auth_reason': 'Unlock Lockd',
+      'set_key_title': 'Set API Key',
+      'set_key_hint': 'Paste your auth key here (X-API-Key):',
+      'set_key_input_hint': 'Paste key...',
+      'cancel': 'Cancel',
+      'save': 'Save',
+      'error': 'Error',
+      'network_error': 'Network error',
+      'invalid_key': 'Invalid API Key!',
+      'state_open': 'Open',
+      'state_closed': 'Closed',
+      'state_locking': 'Locking...',
+      'state_unlocking': 'Opening...',
+      'state_refreshing': 'Refreshing...',
+      'state_unknown': 'Unknown',
+      'state_not_installed': 'Not installed.',
+      'btn_lock': 'LOCK',
+      'btn_unlock': 'UNLOCK',
+      'btn_open': 'OPEN',
+      'btn_pulse': 'TRIGGER',
+      'last_refresh': 'Last refresh',
+      'tooltip_set_key': 'Set Key',
+      'tooltip_refresh': 'Refresh',
+      'open_type_error': 'Error: OPEN type locks cannot be locked.',
+    }
+  };
+}
+
 void main() => runApp(const LocksApp());
 
 class LocksApp extends StatefulWidget {
@@ -18,6 +79,19 @@ class LocksApp extends StatefulWidget {
 
 class _LocksAppState extends State<LocksApp> {
   ThemeMode _themeMode = ThemeMode.system;
+  String _locale = 'hu';
+  final _storage = const FlutterSecureStorage();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final loc = await _storage.read(key: 'locale') ?? 'hu';
+    if (mounted) setState(() => _locale = loc);
+  }
 
   void _toggleTheme() {
     setState(() {
@@ -31,10 +105,16 @@ class _LocksAppState extends State<LocksApp> {
     });
   }
 
+  void _toggleLanguage() async {
+    final next = _locale == 'hu' ? 'en' : 'hu';
+    await _storage.write(key: 'locale', value: next);
+    setState(() => _locale = next);
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Lockd 2.0',
+      title: Translations.data[_locale]!['app_title']!,
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: Colors.blue,
@@ -49,6 +129,8 @@ class _LocksAppState extends State<LocksApp> {
       home: LocksHome(
         themeMode: _themeMode,
         onThemeToggle: _toggleTheme,
+        locale: _locale,
+        onLanguageToggle: _toggleLanguage,
       ),
     );
   }
@@ -57,11 +139,15 @@ class _LocksAppState extends State<LocksApp> {
 class LocksHome extends StatefulWidget {
   final ThemeMode themeMode;
   final VoidCallback onThemeToggle;
+  final String locale;
+  final VoidCallback onLanguageToggle;
 
   const LocksHome({
     super.key,
     required this.themeMode,
     required this.onThemeToggle,
+    required this.locale,
+    required this.onLanguageToggle,
   });
 
   @override
@@ -89,6 +175,8 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _loadKey().then((_) => _gate());
   }
+
+  String _t(String key) => Translations.data[widget.locale]![key] ?? key;
 
   Future<void> _loadKey() async {
     final key = await _storage.read(key: 'api_key');
@@ -135,7 +223,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
 
     try {
       final ok = await _auth.authenticate(
-        localizedReason: 'Lockd feloldás',
+        localizedReason: _t('auth_reason'),
         options: const AuthenticationOptions(
           biometricOnly: false,
           stickyAuth: true,
@@ -165,7 +253,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
       }
     } on PlatformException catch (e) {
       if (!mounted) return;
-      _snack("AUTH hiba: ${e.code}");
+      _snack("AUTH ${_t('error')}: ${e.code}");
       _needsAuth = false;
       if (!_unlocked) {
         setState(() => _unlocked = true);
@@ -186,17 +274,17 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
       context: context,
       barrierDismissible: apiKey != null && apiKey!.isNotEmpty,
       builder: (context) => AlertDialog(
-        title: const Text("API Kulcs beállítása"),
+        title: Text(_t('set_key_title')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Másold be az auth kulcsodat (X-API-Key):"),
+            Text(_t('set_key_hint')),
             const SizedBox(height: 16),
             TextField(
               controller: controller,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: "Kulcs beillesztése...",
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                hintText: _t('set_key_input_hint'),
               ),
               autofocus: true,
             ),
@@ -206,7 +294,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
           if (apiKey != null && apiKey!.isNotEmpty)
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("Mégse"),
+              child: Text(_t('cancel')),
             ),
           FilledButton(
             onPressed: () {
@@ -217,7 +305,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
                 _fetchLocks().then((_) => _startPolling());
               }
             },
-            child: const Text("Mentés"),
+            child: Text(_t('save')),
           ),
         ],
       ),
@@ -243,13 +331,13 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
       final res = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 5));
 
       if (res.statusCode == 401) {
-        _snack("Érvénytelen API kulcs!");
+        _snack(_t('invalid_key'));
         _showKeyDialog();
         return;
       }
 
       if (res.statusCode != 200) {
-        _snack("API hiba (lista): ${res.statusCode}");
+        _snack("API ${_t('error')} (lista): ${res.statusCode}");
         return;
       }
 
@@ -261,7 +349,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
         locks = rawList.map((j) => LockModel.fromJson(j)).toList();
       });
     } catch (e) {
-      _snack("Hálózati hiba: $e");
+      _snack("${_t('network_error')}: $e");
     }
   }
 
@@ -301,7 +389,8 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
   }
 
   bool _isFinalState(String s) {
-    return s == "Nyitva" || s == "Zárva" || s == "NOTFOUND" || s == "OFFLINE" || s == "Ismeretlen";
+    return s == "Nyitva" || s == "Zárva" || s == "NOTFOUND" || s == "OFFLINE" || s == "Ismeretlen" ||
+           s == "Open" || s == "Closed" || s == "Unknown";
   }
 
   Future<void> _sendCmd(LockModel lock, String cmd, {bool silent = false}) async {
@@ -312,7 +401,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
 
     // Safety: no LOCK for OPEN type
     if (lock.type == "OPEN" && upper == "LOCK") {
-      if (!silent) _snack("Hiba: Az 'OPEN' típusú zár nem zárható.");
+      if (!silent) _snack(_t('open_type_error'));
       return;
     }
 
@@ -320,10 +409,10 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
     setState(() {
       lock.pending = true;
       lock.pendingLabel = (upper == "LOCK")
-          ? "Zárás..."
+          ? _t('state_locking')
           : (upper == "UNLOCK")
-              ? "Nyitás..."
-              : "Frissítés...";
+              ? _t('state_unlocking')
+              : _t('state_refreshing');
     });
 
     final timeout = Timer(const Duration(seconds: 10), () {
@@ -349,7 +438,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
           lock.pending = false;
           lock.pendingLabel = null;
         });
-        if (!silent) _snack("Hiba: ${res.body}");
+        if (!silent) _snack("${_t('error')}: ${res.body}");
         return;
       }
 
@@ -367,7 +456,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
         lock.pending = false;
         lock.pendingLabel = null;
       });
-      if (!silent) _snack("Hálózati hiba: $e");
+      if (!silent) _snack("${_t('network_error')}: $e");
     }
   }
 
@@ -403,11 +492,17 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final langLabel = widget.locale.toUpperCase();
+
     if (!_unlocked) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text("Lockd 2.0"),
+          title: Text(_t('app_title')),
           actions: [
+            TextButton(
+              onPressed: widget.onLanguageToggle,
+              child: Text(langLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
             IconButton(
               onPressed: widget.onThemeToggle,
               icon: Icon(_getThemeIcon()),
@@ -423,7 +518,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
               FilledButton.tonalIcon(
                 onPressed: _gate,
                 icon: const Icon(Icons.fingerprint),
-                label: const Text("Feloldás"),
+                label: Text(_t('unlock_bt')),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                 ),
@@ -437,12 +532,16 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Lockd 2.0"),
+        title: Text(_t('app_title')),
         actions: [
+          TextButton(
+            onPressed: widget.onLanguageToggle,
+            child: Text(langLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
           IconButton(
             onPressed: _showKeyDialog,
             icon: const Icon(Icons.vpn_key),
-            tooltip: "Kulcs beállítása",
+            tooltip: _t('tooltip_set_key'),
           ),
           IconButton(
             onPressed: widget.onThemeToggle,
@@ -451,7 +550,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
           IconButton(
             onPressed: _refreshOnce,
             icon: const Icon(Icons.sync),
-            tooltip: "Frissít",
+            tooltip: _t('tooltip_refresh'),
           )
         ],
       ),
@@ -461,6 +560,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
               padding: const EdgeInsets.all(12),
               itemBuilder: (_, i) => LockCard(
                 lock: locks[i],
+                locale: widget.locale,
                 onLock: () => _sendCmd(locks[i], "LOCK"),
                 onUnlock: () => _sendCmd(locks[i], "UNLOCK"),
                 onStatus: () => _sendCmd(locks[i], "STATUS"),
@@ -513,6 +613,7 @@ class LockModel {
 
 class LockCard extends StatelessWidget {
   final LockModel lock;
+  final String locale;
   final VoidCallback onLock;
   final VoidCallback onUnlock;
   final VoidCallback onStatus;
@@ -520,18 +621,31 @@ class LockCard extends StatelessWidget {
   const LockCard({
     super.key,
     required this.lock,
+    required this.locale,
     required this.onLock,
     required this.onUnlock,
     required this.onStatus,
   });
 
+  String _t(String key) => Translations.data[locale]![key] ?? key;
+
   bool get _baseDisabled => lock.state == "NOTFOUND" || lock.pending;
-  bool get _unlockDisabled => _baseDisabled || (lock.type == "TOGGLE" && lock.state == "Nyitva");
-  bool get _lockDisabled => _baseDisabled || (lock.type == "TOGGLE" && lock.state == "Zárva");
+  bool get _unlockDisabled => _baseDisabled || 
+    (lock.type == "TOGGLE" && (lock.state == "Nyitva" || lock.state == "Open"));
+  bool get _lockDisabled => _baseDisabled || 
+    (lock.type == "TOGGLE" && (lock.state == "Zárva" || lock.state == "Closed"));
 
   @override
   Widget build(BuildContext context) {
-    final shownState = lock.pending ? (lock.pendingLabel ?? "…") : lock.state;
+    final shownStateRaw = lock.pending ? (lock.pendingLabel ?? "…") : lock.state;
+    // Map backend state strings to localized labels if not pending
+    String shownState = shownStateRaw;
+    if (!lock.pending) {
+      if (shownStateRaw == "Nyitva" || shownStateRaw == "Open") shownState = _t('state_open');
+      else if (shownStateRaw == "Zárva" || shownStateRaw == "Closed") shownState = _t('state_closed');
+      else if (shownStateRaw == "Ismeretlen" || shownStateRaw == "Unknown") shownState = _t('state_unknown');
+      else if (shownStateRaw == "NOTFOUND") shownState = _t('state_not_installed');
+    }
 
     return Card(
       elevation: 2,
@@ -582,7 +696,7 @@ class LockCard extends StatelessWidget {
             if (lock.updatedAt != null) ...[
               const SizedBox(height: 8),
               Text(
-                "Utolsó frissítés: ${lock.updatedAt}",
+                "${_t('last_refresh')}: ${lock.updatedAt}",
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -592,8 +706,11 @@ class LockCard extends StatelessWidget {
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: _unlockDisabled ? null : onUnlock,
-                    icon: Icon(lock.type == "OPEN" ? Icons.key : Icons.lock_open),
-                    label: Text(lock.type == "OPEN" ? "NYITÁS" : "NYIT"),
+                    icon: Icon(lock.type == "PULSE" ? Icons.bolt : (lock.type == "TOGGLE" ? Icons.lock_open : Icons.key)),
+                    label: Text(
+                      lock.type == "PULSE" ? _t('btn_pulse') : 
+                      (lock.type == "STRIKE" || lock.type == "OPEN") ? _t('btn_open') : _t('btn_unlock')
+                    ),
                   ),
                 ),
                 if (lock.type == "TOGGLE") ...[
@@ -602,7 +719,7 @@ class LockCard extends StatelessWidget {
                     child: FilledButton.icon(
                       onPressed: _lockDisabled ? null : onLock,
                       icon: const Icon(Icons.lock),
-                      label: const Text("ZÁR"),
+                      label: Text(_t('btn_lock')),
                       style: FilledButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.errorContainer,
                         foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
@@ -619,7 +736,7 @@ class LockCard extends StatelessWidget {
             ),
             if (lock.state == "NOTFOUND") ...[
               const SizedBox(height: 8),
-              const Text("Nincs telepítve.", style: TextStyle(color: Colors.red)),
+              Text(_t('state_not_installed'), style: const TextStyle(color: Colors.red)),
             ],
           ],
         ),
@@ -677,11 +794,15 @@ class LockCard extends StatelessWidget {
   IconData _getStateIcon(String state) {
     switch (state) {
       case "Nyitva":
+      case "Open":
         return Icons.lock_open;
       case "Zárva":
+      case "Closed":
         return Icons.lock;
       case "Zárás...":
       case "Nyitás...":
+      case "Locking...":
+      case "Opening...":
         return Icons.autorenew;
       default:
         return Icons.help_outline;
@@ -691,11 +812,15 @@ class LockCard extends StatelessWidget {
   Color _getStateColor(String state) {
     switch (state) {
       case "Nyitva":
+      case "Open":
         return Colors.green;
       case "Zárva":
+      case "Closed":
         return Colors.red;
       case "Zárás...":
       case "Nyitás...":
+      case "Locking...":
+      case "Opening...":
         return Colors.orange;
       default:
         return Colors.grey;
