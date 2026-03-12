@@ -1,19 +1,27 @@
-# Projekt Architektúra - lockd2 (Mobilapp)
+# Project Architecture - lockd2 (Mobile App)
 
-## Aktuális állapot
-A `lockd2` egy Flutter keretrendszerben fejlesztett mobilalkalmazás, amely a `lockd-go2` backendhez csatlakozik. Az alkalmazás lehetővé teszi a zárak állapotának megtekintését és vezérlését (nyitás/zárás/trigger).
+## Current State
+`lockd2` is a mobile application developed with the Flutter framework that connects to the `lockd-go2` backend. The app allows viewing and controlling lock states (open/close/trigger).
 
-## Funkcionalitás
-- **Dinamikus UI**: A backend által küldött ACL és zártípus alapján automatikusan generált vezérlőfelület.
-- **API Kulcskezelés**: Kezdeti beállításkor vagy a beállításokban megadható titkos kulcs a hitelesítéshez.
-- **Lokalizáció**: Magyar és angol nyelv támogatása.
-- **Automatizált Build**: GitHub Actions segítségével automatikusan generált APK minden push után.
+## Functionality
+- **Dynamic UI**: Control interface automatically generated based on the ACL and lock type sent by the backend.
+- **API Key Management**: Secret key for authentication can be provided during initial setup or in settings.
+- **Localization**: Support for Hungarian and English languages.
+- **Automated Build**: Android APK automatically generated after every push using GitHub Actions.
 
-## Fájllista és funkciók
-- [lib/main.dart](./lib/main.dart): Az alkalmazás belépési pontja és a teljes UI logika (egy fájlas implementáció a könnyebb kezelhetőség érdekében).
-- [assets/](./assets): Képi erőforrások és ikonok.
-- [.github/workflows/](./.github/workflows): CI/CD folyamatok (Android build).
+## File List and Functions
+- [lib/main.dart](./lib/main.dart): Entry point of the application and the complete UI logic (single-file implementation for easier management).
+- [assets/](./assets): Image resources and icons.
+- [.github/workflows/](./.github/workflows): CI/CD processes (Android build).
 
-## Kapcsolódó Projektek
-- [lockd-go2 Backend](https://github.com/MarciPain/lockd-go2): A kiszolgáló oldali logika.
-- [hass-lockd2-addon](https://github.com/MarciPain/hass-lockd2-addon): Home Assistant integráció.
+## Related Projects
+- [lockd-go2 Backend](https://github.com/MarciPain/lockd-go2): Server-side logic.
+- [hass-lockd2-addon](https://github.com/MarciPain/hass-lockd2-addon): Home Assistant integration.
+
+---
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-orange.svg)](https://buymeacoffee.com/marcipain)
+
+---
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-orange.svg)](https://buymeacoffee.com/marcipain)

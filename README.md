@@ -26,7 +26,11 @@ You can find the compiled APKs in the **Actions** tab of the GitHub repository u
 - **[Home Assistant Addon](https://github.com/MarciPain/hass-lockd2-addon)**: Official addon to use Lockd2 within Home Assistant.
 
 ## Technical Details
-For developers and advanced users, please refer to the **[ARCHITECTURE.md](file:///c:/Users/MarciPain/.gemini/antigravity/scratch/lockd2/ARCHITECTURE.md)** for project structure and technical overview.
+For developers and advanced users, please refer to the **[ARCHITECTURE.md](./ARCHITECTURE.md)** for project structure and technical overview.
+
+---
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-orange.svg)](https://buymeacoffee.com/marcipain)
 
 ---
 Built with Flutter.
