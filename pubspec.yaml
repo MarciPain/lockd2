@@ -1,5 +1,5 @@
 name: lockd2
-description: Lockd 2.0 dynamic lock controller
+description: Lockd 2.1 dynamic lock controller
 publish_to: "none"
 version: 0.2.0+1
 

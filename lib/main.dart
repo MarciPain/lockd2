@@ -14,7 +14,7 @@ import 'package:path/path.dart' as p;
 class Translations {
   static final data = {
     'hu': {
-      'app_title': 'Lockd 2.0',
+      'app_title': 'Lockd 2.1',
       'unlock_bt': 'FELOLDÁS',
       'invalid_key': 'Érvénytelen kulcs!',
       'error': 'Hiba',
@@ -48,7 +48,7 @@ class Translations {
       'open_type_error': 'Hiba: Az \'OPEN\' típusú zár nem zárható.',
     },
     'en': {
-      'app_title': 'Lockd 2.0',
+      'app_title': 'Lockd 2.1',
       'unlock_bt': 'UNLOCK',
       'invalid_key': 'Invalid Key!',
       'error': 'Error',
