@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -361,10 +362,41 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _loadConfigFromFile(TextEditingController urlController, TextEditingController keyController) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final file = File(result.files.single.path!);
+      final content = await file.readAsString();
+      final json = jsonDecode(content) as Map<String, dynamic>;
+
+      final url = json['url'] as String?;
+      final token = json['token'] as String?;
+
+      if (url == null || token == null) {
+        _snack(_t('error') + ": a JSON fájl tartalmaznia kell 'url' és 'token' mezőket");
+        return;
+      }
+
+      urlController.text = url;
+      keyController.text = token;
+      _snack("Sikeresen betöltve!");
+      DebugLogger.log("Config loaded from file: $url");
+    } catch (e) {
+      _snack(_t('error') + ": $e");
+      DebugLogger.log("Failed to load config from file: $e");
+    }
+  }
+
   void _showKeyDialog() {
     final urlController = TextEditingController(text: baseUrl);
     final keyController = TextEditingController(text: apiKey);
-    
+
     showDialog(
       context: context,
       barrierDismissible: apiKey != null && apiKey!.isNotEmpty && baseUrl != null && baseUrl!.isNotEmpty,
@@ -376,6 +408,14 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
             child: Column(
               mainAxisSize: MainAxisSize.min,
             children: [
+              FilledButton.tonalIcon(
+                onPressed: () => _loadConfigFromFile(urlController, keyController),
+                icon: const Icon(Icons.upload_file),
+                label: const Text("Betöltés fájlból"),
+              ),
+              const SizedBox(height: 16),
+              const Text("vagy írj be kézzel:", style: TextStyle(color: Colors.grey, fontSize: 12)),
+              const SizedBox(height: 16),
               Text(_t('set_url_hint')),
               const SizedBox(height: 8),
               TextField(
