@@ -14,7 +14,7 @@ import 'package:path/path.dart' as p;
 class Translations {
   static final data = {
     'hu': {
-      'app_title': 'Lockd 2.2.0',
+      'app_title': 'Lockd 2.2.1',
       'unlock_bt': 'FELOLDÁS',
       'invalid_key': 'Érvénytelen kulcs!',
       'error': 'Hiba',
@@ -48,7 +48,7 @@ class Translations {
       'open_type_error': 'Hiba: Az \'OPEN\' típusú zár nem zárható.',
     },
     'en': {
-      'app_title': 'Lockd 2.2.0',
+      'app_title': 'Lockd 2.2.1',
       'unlock_bt': 'UNLOCK',
       'invalid_key': 'Invalid Key!',
       'error': 'Error',
@@ -248,13 +248,12 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
   Future<void> _saveKey(String url, String key) async {
     await _storage.write(key: 'server_url', value: url);
     await _storage.write(key: 'api_key', value: key);
-    if (mounted) {
-      setState(() {
-        baseUrl = url;
-        apiKey = key;
-      });
-    }
-    _refreshOnce();
+    baseUrl = url;
+    apiKey = key;
+    if (mounted) setState(() {});
+    _stopPolling();
+    await _fetchLocks();
+    _startPolling();
   }
 
   @override
@@ -458,7 +457,6 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
               if (url.isNotEmpty && key.isNotEmpty) {
                 _saveKey(url, key);
                 Navigator.pop(context);
-                _fetchLocks().then((_) => _startPolling());
               }
             },
             child: Text(_t('save')),
@@ -690,7 +688,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Text(
-          "Lockd 2.2.0",
+          "Lockd 2.2.1",
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodySmall,
         ),
