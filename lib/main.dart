@@ -18,7 +18,7 @@ import 'package:path/path.dart' as p;
 class Translations {
   static final data = {
     'hu': {
-      'app_title': 'Lockd 2.3.0',
+      'app_title': 'Lockd 2.3.1',
       'unlock_bt': 'FELOLDÁS',
       'invalid_key': 'Érvénytelen kulcs!',
       'error': 'Hiba',
@@ -60,7 +60,7 @@ class Translations {
       'profiles_title': 'Profilok',
     },
     'en': {
-      'app_title': 'Lockd 2.3.0',
+      'app_title': 'Lockd 2.3.1',
       'unlock_bt': 'UNLOCK',
       'invalid_key': 'Invalid Key!',
       'error': 'Error',
@@ -269,6 +269,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
   bool _needsAuth = true;
 
   bool _isOffline = false;
+  bool _pickingFile = false;
 
   @override
   void initState() {
@@ -290,6 +291,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
         state == AppLifecycleState.inactive) {
       if (state == AppLifecycleState.inactive &&
           (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) return;
+      if (_pickingFile) return;
       _needsAuth = true;
       if (_unlocked) {
         _stopPolling();
@@ -559,8 +561,13 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
     TextEditingController nameCtrl,
   ) async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-          type: FileType.custom, allowedExtensions: ['json']);
+      _pickingFile = true;
+      final FilePickerResult? result;
+      try {
+        result = await FilePicker.platform.pickFiles(type: FileType.any);
+      } finally {
+        _pickingFile = false;
+      }
       if (result == null || result.files.isEmpty) return;
       final content = await File(result.files.single.path!).readAsString();
       final j = jsonDecode(content) as Map<String, dynamic>;
@@ -837,7 +844,7 @@ class _LocksHomeState extends State<LocksHome> with WidgetsBindingObserver {
         top: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Text("Lockd 2.3.0",
+          child: Text("Lockd 2.3.1",
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall),
         ),

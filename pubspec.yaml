@@ -1,7 +1,7 @@
 name: lockd2
-description: Lockd 2.3.0 dynamic lock controller
+description: Lockd 2.3.1 dynamic lock controller
 publish_to: "none"
-version: 2.3.0+1
+version: 2.3.1+1
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
